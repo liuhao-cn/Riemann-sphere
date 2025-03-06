@@ -937,7 +937,7 @@ if __name__ == "__main__":
     
     # 输出文件路径
     quality_map = {"l": "480p15", "m": "720p30", "h": "1080p60", "k": "2160p60"}
-    output_dir = f"{default_output_dir}/videos/{quality_map[args.quality]}"
+    output_dir = f"{default_output_dir}/videos/demo/{quality_map[args.quality]}"
     output_file = f"{output_dir}/RiemannSphere.mp4"
     print(f"渲染完成！")
     print(f"输出文件: {output_file}")

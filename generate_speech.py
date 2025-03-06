@@ -146,7 +146,7 @@ def clean_cache():
 
 
 if __name__ == "__main__":
-    video_file = "media/videos/demo/480p15/RiemannSphere.mp4"
+    video_file = "media/videos/demo/2160p60/RiemannSphere.mp4"
     subtitles_file = "media/subtitles.jsonl"
 
     tts_engine = tts_engine_aliyun
