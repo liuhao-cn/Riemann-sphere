@@ -3,11 +3,58 @@ from manim import Surface
 import numpy as np
 import argparse
 import os
+import json
 import shutil
+
+# manim default output dir
+default_output_dir = "./media/"
 
 class RiemannSphere(ThreeDScene):
     def __init__(self):
         super().__init__()
+        
+        # 初始化总时间计数器
+        self.animation_timer = 0.0
+        self.subtitle_id = 0
+
+        # 确保缓存目录存在
+        os.makedirs(default_output_dir, exist_ok=True)
+        self.subtitle_file = os.path.join(default_output_dir, "subtitles.jsonl")
+
+        # 如果字幕文件存在，则清空文件，否则创建文件
+        if os.path.exists(self.subtitle_file):
+            with open(self.subtitle_file, 'w', encoding='utf-8') as f:
+                f.write('')  # 写入空字符串，即清空文件
+            print(f"已清空字幕文件: {self.subtitle_file}")
+        else:
+            os.makedirs(os.path.dirname(self.subtitle_file), exist_ok=True)
+
+    def update_subtitle(self, text, wait=0.0, fontsize=24):
+        """更新字幕并同步写入字幕文件，包括时间。注意需要内置动画计时器支持"""
+        # 移除旧字幕
+        if hasattr(self, 'subtitle') and self.subtitle is not None:
+            self.remove(self.subtitle)
+        
+        if text:
+            # 创建新字幕
+            new_subtitle = Text(text, font_size=fontsize)
+            new_subtitle.to_edge(DOWN)
+            self.add_fixed_in_frame_mobjects(new_subtitle)
+            self.subtitle = new_subtitle
+
+            # 将字幕记录到文件，包括编号、开始时间、文本内容
+            self.subtitle_id += 1
+            subtitle_json = {
+                "id":           self.subtitle_id, 
+                "text":         text.strip(),  # 移除空白
+                "start_time":   self.animation_timer
+                }
+        
+            # 写入字幕数据
+            with open(self.subtitle_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(subtitle_json, ensure_ascii=False) + '\n')
+            
+        self.wait(wait); self.animation_timer += float(wait)
     
     def format_complex_number(self, r, angle_index):
         """格式化复数文本，确保使用两位整数表示分子"""
@@ -65,21 +112,7 @@ class RiemannSphere(ThreeDScene):
         
         # 设置相机初始角度（平面视图）
         self.set_camera_orientation(phi=0, theta=-90*DEGREES)
-    
-    def update_subtitle(self, text, duration=3):
-        """更新字幕并等待指定时间"""
-        # 移除旧字幕
-        self.remove(self.subtitle)
         
-        # 创建新字幕
-        new_subtitle = Text(text, font_size=28)
-        new_subtitle.to_edge(DOWN)
-        self.add_fixed_in_frame_mobjects(new_subtitle)
-        self.subtitle = new_subtitle
-        
-        # 等待指定时间
-        self.wait(duration)
-    
     def phase1_2D_complex_plane(self):
         """第一阶段：2D复平面及点的运动"""
         # 创建坐标轴
@@ -100,18 +133,22 @@ class RiemannSphere(ThreeDScene):
         self.y_label = y_label
         
         # 1. 展示实轴
-        self.play(Create(axes.x_axis), Create(x_label))
-        self.update_subtitle("实轴代表复数的实部")
+        
+        self.play(Create(axes.x_axis), Create(x_label), run_time=1)
+        self.animation_timer += 1
+        self.update_subtitle("复平面上有实轴和虚轴，实轴代表复数的实部", wait=4)
         
         # 2. 展示虚轴
-        self.play(Create(axes.y_axis), Create(y_label))
-        self.update_subtitle("虚轴代表复数的虚部")
+        self.play(Create(axes.y_axis), Create(y_label), run_time=1)
+        self.animation_timer += 1
+        self.update_subtitle("虚轴代表复数的虚部", wait=3)
         
         # 3. 展示原点
+        self.update_subtitle("原点则表示复数 0", wait=2)
         origin = Dot([0, 0, 0], color=WHITE)
         origin_label = Tex("$0$", color=WHITE).next_to(origin, DOWN+LEFT, buff=0.1)
-        self.play(Create(origin), Write(origin_label))
-        self.update_subtitle("原点表示复数0")
+        self.play(Create(origin), Write(origin_label), run_time=2)
+        self.animation_timer += 2
         
         # 4. 展示复平面上的点
         z_dot = Dot(self.INITIAL_Z_POINT, color=YELLOW)
@@ -120,8 +157,9 @@ class RiemannSphere(ThreeDScene):
         complex_num = MathTex("z = 1 + 0i", font_size=48).to_corner(UR).shift(LEFT*0.5)
         self.add_fixed_in_frame_mobjects(complex_num)
         
-        self.play(Create(z_dot))
-        self.update_subtitle("复平面上的点表示一个复数")
+        self.update_subtitle("复平面上的点对应于不同的复数", wait=1)
+        self.play(Create(z_dot), run_time=2)
+        self.animation_timer += 2
         
         # 创建完整的复平面 - 增强网格线
         complex_plane = NumberPlane(
@@ -134,12 +172,9 @@ class RiemannSphere(ThreeDScene):
             }
         ).set_opacity(0.7)  # 增加整体不透明度
         
-        self.play(
-            Create(complex_plane), 
-            FadeOut(origin_label),
-            run_time=2
-        )
-        self.update_subtitle("这就是复平面，每一点对应一个复数")
+        self.play(Create(complex_plane), run_time=2)
+        self.animation_timer += 2
+        self.update_subtitle("这就是复平面，每一点对应一个复数", wait=3)
         
         # 5. 按直角坐标系运动 - 修改为正方形路径
         positions = [
@@ -152,8 +187,7 @@ class RiemannSphere(ThreeDScene):
             [1, 0, 0]     # 回到初始位置
         ]
         
-        self.update_subtitle("让我们观察点在复平面上的运动")
-        
+        self.update_subtitle("让我们观察点在复平面上的运动", wait=3)
         # 角点位置索引
         corner_indices = [1, 2, 3, 4, 5]
         
@@ -169,27 +203,28 @@ class RiemannSphere(ThreeDScene):
                         FadeTransform(complex_num, new_complex),
                         run_time=1.5
                     )
+                    self.animation_timer += 1.5
+                    
                     # 在角点处添加强调动画
                     self.play(
                         z_dot.animate.scale(1.5),  # 放大
                         run_time=0.3
-                    )
+                    ); self.animation_timer += 0.3
+
                     self.play(
                         z_dot.animate.scale(1/1.5),  # 恢复原大小
                         run_time=0.3
-                    )
-                    self.wait(0.5)
+                    ); self.animation_timer += 0.3
+                    self.wait(0.5); self.animation_timer += 0.5
                 else:
                     self.play(
                         z_dot.animate.move_to(pos),
                         FadeTransform(complex_num, new_complex),
                         run_time=1.5
-                    )
-                
+                    ); self.animation_timer += 1.5
                 complex_num = new_complex
         
-        self.update_subtitle("接下来我们使用极坐标表示复数")
-        
+        self.update_subtitle("接下来我们使用极坐标表示复数", wait=3)
         # 6. 按极坐标系运动（半径不变，角度变化）
         radius = 2
         
@@ -203,15 +238,16 @@ class RiemannSphere(ThreeDScene):
             FadeOut(complex_num),
             Create(radius_line),
             Create(theta_arc),
-            Write(theta_label)
-        )
+            Write(theta_label),
+            run_time=2
+        ); self.animation_timer += 2
         
         # 创建极坐标表示的复数值
         initial_complex = self.format_complex_number(radius, 0)
         polar_complex = MathTex(initial_complex, font_size=48).to_corner(UR).shift(LEFT*0.5)
         self.add_fixed_in_frame_mobjects(polar_complex)
         
-        self.update_subtitle("极坐标表示复数更适合描述旋转和缩放")
+        self.update_subtitle("极坐标表示复数更适合描述旋转和缩放", wait=3)
         
         # 定义四个特殊角度（0°, 90°, 180°, 270°）
         special_angles = [0, PI/2, PI, 3*PI/2, 2*PI]
@@ -257,31 +293,34 @@ class RiemannSphere(ThreeDScene):
                 run_time=2.0,  # 每段动画时间
                 rate_func=linear  # 线性变化，使速度均匀
             )
+            self.animation_timer += 2.0
             
             # 添加强调动画
             self.play(
                 z_dot.animate.scale(1.5),  # 放大
-                run_time=0.2
-            )
+                run_time=0.3
+            ); self.animation_timer += 0.3
             self.play(
                 z_dot.animate.scale(1/1.5),  # 恢复原大小
-                run_time=0.2
-            )
-            self.wait(0.2)  # 稍作停留
+                run_time=0.3
+            ); self.animation_timer += 0.3
+            self.wait(0.2); self.animation_timer += 0.2
         
         # 保存复数值显示的引用
         self.complex_num = polar_complex
         
-        self.update_subtitle("这就是复数在极坐标下的表示和运动")
+        self.update_subtitle("这就是复数在极坐标下的表示和运动", wait=4)
         
         # 清理临时对象，保留重要元素
         self.play(
             FadeOut(theta_arc),
             FadeOut(theta_label),
-            FadeOut(radius_line)
+            FadeOut(radius_line),
+            run_time=0.3
         )
-        
-        # 保存引用以在后续阶段使用
+        self.animation_timer += 0.3
+
+        # 保存引用以在后续阶段使用  
         self.complex_plane = complex_plane
         self.z_dot = z_dot
         self.axes_2d = axes
@@ -289,9 +328,10 @@ class RiemannSphere(ThreeDScene):
     def phase2_transition_to_3d(self):
         """第二阶段：从复平面过渡到3D空间"""
         # 在过渡到3D之前，移除右上角的复数文本，避免遗留
-        self.play(FadeOut(self.complex_num))
+        self.play(FadeOut(self.complex_num), run_time=0.3)
+        self.animation_timer += 0.3
         
-        self.update_subtitle("现在我们将从复平面过渡到三维空间以引入黎曼球面。")
+        self.update_subtitle("现在我们将从复平面过渡到三维空间以引入黎曼球面。", wait=4)
         
         # 硬编码坐标轴配置
         axes_config = {
@@ -330,8 +370,10 @@ class RiemannSphere(ThreeDScene):
         self.play(
             FadeOut(old_y_axis),
             Create(new_y_axis),
-            y_label.animate.move_to(new_y_label_pos)
+            y_label.animate.move_to(new_y_label_pos),
+            run_time=0.3
         )
+        self.animation_timer += 0.3
         
         # 更新复平面的y轴范围 - 创建新的复平面而不是修改现有的
         new_complex_plane = NumberPlane(
@@ -347,8 +389,10 @@ class RiemannSphere(ThreeDScene):
         # 替换旧的复平面
         self.play(
             FadeOut(self.complex_plane), 
-            FadeIn(new_complex_plane)
+            FadeIn(new_complex_plane),
+            run_time=0.3
         )
+        self.animation_timer += 0.3
         self.complex_plane = new_complex_plane
         
         # 计算从(1,-1,1)望向原点的相机角度
@@ -386,6 +430,7 @@ class RiemannSphere(ThreeDScene):
             zoom=1.0,
             run_time=4
         )
+        self.animation_timer += 4
         
         # 在相机移动后，转换2D元素到3D元素
         # 保留原有的xy标签,不创建新的3D标签
@@ -397,7 +442,8 @@ class RiemannSphere(ThreeDScene):
             FadeTransform(self.z_dot, z_dot_3d),
             run_time=3
         )
-        
+        self.animation_timer += 3
+
         # # 将标签添加到固定帧,这样它们就不会随相机旋转而消失，但目前暂时不需要
         # self.add_fixed_in_frame_mobjects(x_label, y_label)
         # self.add_fixed_in_frame_mobjects(x_label_3d, y_label_3d, z_label_3d)
@@ -405,11 +451,10 @@ class RiemannSphere(ThreeDScene):
         # 保存3D标签引用以便后续使用
         self.x_label_3d = x_label_3d
         self.y_label_3d = y_label_3d
-        
-        self.wait()
+        self.wait(0.3); self.animation_timer += 0.3
         
         # 解释3D视角
-        self.update_subtitle("在三维空间中，复平面位于水平面上")
+        self.update_subtitle("在三维空间中，复平面位于水平面上", wait=3)
         
         # 更新场景引用
         self.complex_plane = new_complex_plane
@@ -469,8 +514,9 @@ class RiemannSphere(ThreeDScene):
         # 组合所有网格线
         sphere_grid = VGroup(longitudes, latitudes)
         
-        self.play(Create(sphere_grid))
-        self.update_subtitle("这是黎曼球面，它将复平面映射到球面上")
+        self.update_subtitle("这是黎曼球面，它将复平面映射到球面上", wait=1)
+        self.play(Create(sphere_grid), run_time=2)
+        self.animation_timer += 2
         
         # 硬编码视觉配置
         visual_config = {
@@ -503,14 +549,15 @@ class RiemannSphere(ThreeDScene):
         ).to_corner(UR).shift(DOWN)
         
         # 先显示北极点，然后等待一帧使摄像机更新
-        self.play(Create(north_pole))
+        self.play(Create(north_pole), run_time=2)
+        self.animation_timer += 2
         # # 将北极点移到前面，使其始终显示在球面网格之上
         # # bring_to_front 在3D场景中可能不生效，使用以下方法确保北极点可见
         # self.remove(north_pole)  # 先移除北极点
         # self.add(north_pole)     # 再添加回来，确保它在渲染顺序中位于最后
         # 另一种方法是调整z_index
         north_pole.set_z_index(10)  # 设置较高的z_index值
-        self.wait(0.1)
+        self.wait(0.3); self.animation_timer += 0.3
         
         # 获取北极点在屏幕上的2D投影坐标
         north_pole_screen_pos = self.camera.project_point(north_pole_pos)
@@ -532,7 +579,7 @@ class RiemannSphere(ThreeDScene):
         )
         
         self.add_fixed_in_frame_mobjects(north_pole_label, north_pole_arrow)
-        self.update_subtitle("黎曼球面的北极点对应复平面上的无穷远点")
+        self.update_subtitle("黎曼球面的北极点对应复平面上的无穷远点", wait=6)
         
         def get_projection_point(z_point):
             """
@@ -573,11 +620,7 @@ class RiemannSphere(ThreeDScene):
             
             # 球心坐标
             center_x, center_y, center_z = 0, 0, self.SPHERE_RADIUS
-            
-            # 计算射线与球面的交点
-            # 射线方程: p(t) = (north_x, north_y, north_z) + t * unit_direction
-            # 球面方程: (x - center_x)^2 + (y - center_y)^2 + (z - center_z)^2 = self.SPHERE_RADIUS^2
-            
+
             # 代入射线方程到球面方程，得到关于t的二次方程: at^2 + bt + c = 0
             a = np.sum(unit_direction**2)  # 应该等于1
             b = 2 * np.sum(unit_direction * np.array([north_x - center_x, north_y - center_y, north_z - center_z]))
@@ -618,13 +661,15 @@ class RiemannSphere(ThreeDScene):
             stroke_width=3
         )
         
-        self.play(Create(north_to_z_line))
-        self.update_subtitle("从北极点向复平面上的点连一条直线")
+        self.update_subtitle("从北极点向复平面上的点连一条直线", wait=4)
+        self.play(Create(north_to_z_line), run_time=2)
+        self.animation_timer += 2
         
         # 投影点及标签 - 确保在网格线之前显示
-        # self.bring_to_front(projection_dot)  # 将投影点移到前面
+        self.update_subtitle("直线与球面相交的点，就是复数在黎曼球面上的投影", wait=4)
         projection_dot.set_z_index(10)  # 设置较高的z_index值
-        self.play(Create(projection_dot))
+        self.play(Create(projection_dot), run_time=2)
+        self.animation_timer += 2
         
         # 在计算投影点后，修正投影点箭头
         # 添加投影标签和箭头
@@ -647,15 +692,18 @@ class RiemannSphere(ThreeDScene):
         )
         
         self.add_fixed_in_frame_mobjects(proj_label, proj_arrow)
-        self.update_subtitle("直线与球面相交的点，就是复数在黎曼球面上的投影")
         
+        self.wait(1); self.animation_timer += 1
+
         # 移除箭头和标签
         self.play(
             FadeOut(north_pole_arrow),
             FadeOut(proj_arrow),
             FadeOut(north_pole_label),
-            FadeOut(proj_label)
+            FadeOut(proj_label),
+            run_time=0.5
         )
+        self.animation_timer += 0.5
         
         # 创建复数值显示，供后续阶段使用
         initial_complex = self.format_complex_number(2, 0)
@@ -673,9 +721,10 @@ class RiemannSphere(ThreeDScene):
         """第四阶段：点的移动与投影变化"""
         # 移除前一阶段的复数文本，避免文本重叠
         if hasattr(self, 'complex_num'):
-            self.play(FadeOut(self.complex_num))
+            self.play(FadeOut(self.complex_num), run_time=0.3)
+            self.animation_timer += 0.3
             
-        self.update_subtitle("现在我们改变复数的辐角，观察投影点的变化")
+        self.update_subtitle("现在我们改变复数的辐角，观察投影点的变化", wait=4)
         
         # 硬编码文本配置
         text_config = {
@@ -711,9 +760,10 @@ class RiemannSphere(ThreeDScene):
         self.play(
             FadeIn(z_dot),
             FadeIn(projection_dot),
-            Create(north_to_z_line)
+            Create(north_to_z_line),
+            run_time=0.3    
         )
-        
+        self.animation_timer += 0.3
         # 创建初始复数值显示，使用极坐标格式
         initial_complex = self.format_complex_number(start_r, 0)
         complex_text = MathTex(initial_complex, font_size=48).to_corner(UR)
@@ -723,10 +773,9 @@ class RiemannSphere(ThreeDScene):
         self.add_fixed_in_frame_mobjects(complex_text)
         self.complex_num = complex_text
         
-        self.update_subtitle("现在我们改变复数的辐角，观察投影点的变化")
-        
         # 在开始新的动画前，明确移除原有连接线
-        self.play(FadeOut(north_to_z_line))
+        self.play(FadeOut(north_to_z_line), run_time=0.3)
+        self.animation_timer += 0.3
         
         # 减少帧数 - 只取8个关键角度点（每45度一个）
         angles = [i * PI/8 for i in range(1, 17)]  # 从PI/4到2PI，每PI/4一个点
@@ -758,35 +807,39 @@ class RiemannSphere(ThreeDScene):
                 projection_dot.animate.move_to(projection_new),
                 Transform(self.complex_num, new_tex),
                 Create(new_line),
-                run_time=0.5  # 减少每段动画的时间
+                run_time=1.0  # 减少每段动画的时间
             )
+            self.animation_timer += 1.0
             
             # 在下一帧之前移除当前连接线
-            self.play(FadeOut(new_line), run_time=0.1)
+            self.play(FadeOut(new_line), run_time=0.2)
+            self.animation_timer += 0.2
     
     def phase5_infinity_point(self):
         """第五阶段：无穷远点映射"""
         # 移除复数文本，彻底解决重叠问题
-        self.play(FadeOut(self.complex_num))
+        self.play(FadeOut(self.complex_num), run_time=0.3)
+        self.animation_timer += 0.3
         
-        self.update_subtitle("现在我们观察当复数沿实轴移动时，投影点的变化")
+        self.update_subtitle("现在我们观察当复数沿实轴移动时，投影点的变化", wait=6)
 
         # 北极点位置
         north_pole_pos = np.array([0, 0, 2*self.SPHERE_RADIUS])
         
         # 添加字幕说明移动方向和效果
-        self.update_subtitle("接下来复数将沿着实轴从负无穷移动到正无穷")
-        self.wait(2)
+        self.update_subtitle("接下来复数将沿着实轴从负无穷移动到正无穷", wait=1)
 
         # 定义r值序列
         # 从大到小的正数值和从小到大的负数值，用于模拟复数从负无穷到正无穷的移动
-        r_negative = [-20, -10, -7, -5, -4.5, -4, -3.5, -3, -2.5, -2, -1.8, -1.6, -1.4, -1.2, -1, -0.8, -0.6, -0.4, -0.2, -0.1]
-        r_positive = [0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 4.5, 5, 7, 10, 20]
+        r_negative = [-20, -10, -7, -5, -4, -3.5, -3, -2.5, -2, -1.7, -1.4, -1.1, -0.8, -0.5, -0.2]
+        r_positive = [0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2, 2.5, 3, 3.5, 4, 5, 7, 10, 20]
         r_values = r_negative + r_positive
         
-        # 先让z_dot隐身
-        self.play(FadeOut(self.z_dot), run_time=0.2)
-        self.play(FadeOut(self.projection_dot), run_time=0.2)
+        # 先让z_dot隐身,
+        self.play(FadeOut(self.z_dot), run_time=0.3)
+        self.animation_timer += 0.3
+        self.play(FadeOut(self.projection_dot), run_time=0.3)
+        self.animation_timer += 0.3
         
         # 计算r_values起始点的位置
         initial_r = r_values[0]  # 获取r_values的第一个值
@@ -797,8 +850,10 @@ class RiemannSphere(ThreeDScene):
         self.projection_dot.move_to(projection_pos)
         
         # 让投影点重新显形
-        self.play(FadeIn(self.projection_dot), run_time=0.2)
-        self.play(FadeIn(self.z_dot), run_time=0.2)
+        self.play(FadeIn(self.projection_dot), run_time=0.3)
+        self.animation_timer += 0.3
+        self.play(FadeIn(self.z_dot), run_time=0.3)
+        self.animation_timer += 0.3
 
         # 创建轨迹对象 - 使用TracedPath跟踪投影点的移动
         # 注意：我们需要先创建一个新的投影点，因为TracedPath会跟踪这个点的移动
@@ -833,32 +888,26 @@ class RiemannSphere(ThreeDScene):
                 self.projection_dot.animate.move_to(projection_new),
                 tracing_dot.animate.move_to(projection_new),  # 这个点的移动会被TracedPath跟踪
                 Create(new_line),
-                run_time=0.8
+                run_time=1.0
             )
+            self.animation_timer += 1.0
             
             # 在下一帧之前移除当前连接线
-            self.play(FadeOut(new_line), run_time=0.1)
+            self.play(FadeOut(new_line), run_time=0.2)
+            self.animation_timer += 0.2
         
-        self.update_subtitle("当复数沿着实轴从负无穷移动到正无穷，投影点会画出一个大圆")
-        self.wait(2)
+        self.update_subtitle("当复数沿着实轴从负无穷移动到正无穷，投影点会画出一个大圆", wait=6)
         
-        self.update_subtitle("大圆经过北极点，意味着黎曼球面北极点对应的是复平面上的无穷远点")
-        self.wait(2)
+        self.update_subtitle("大圆经过北极点，意味着黎曼球面北极点对应的是复平面上的无穷远点", wait=7)
         
-        self.update_subtitle("复平面上的直线对应于黎曼球面上的圆，它们全都经过北极点，但未必都是大圆")
-        self.wait(2)
+        self.update_subtitle("复平面上的直线对应于黎曼球面上的圆，它们全都经过北极点，但未必都是大圆", wait=7)
 
     def ending(self):
         """动画结束阶段"""
         # 总结动画内容
-        self.update_subtitle("今天我们学习了如何将复平面映射到黎曼球面")
-        self.wait(2)
-        
-        self.update_subtitle("请大家进一步思考：什么样的直线一定对应于大圆？")
-        self.wait(2)
-
-        self.update_subtitle("谢谢观看！")
-        self.wait(2)
+        self.update_subtitle("今天我们学习了如何将复平面映射到黎曼球面", wait=7)
+        self.update_subtitle("请大家进一步思考：什么样的直线一定对应于大圆？", wait=7)
+        self.update_subtitle("谢谢观看！", wait=3)
 
 
 if __name__ == "__main__":
@@ -867,37 +916,35 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="运行黎曼球面动画")
     parser.add_argument("--quality", "-q", type=str, choices=["l", "m", "h", "k"], default="l",
                         help="动画质量：l(低), m(中), h(高), k(4K)")
+    parser.add_argument("--preview", "-p", action="store_true",
+                        help="是否自动预览")
     parser.add_argument("--force", "-f", action="store_true",
                         help="是否强制重新渲染")
-    parser.add_argument("--cache-dir", "-c", type=str, default="./media",
-                        help="缓存文件夹路径，默认为./media")
     parser.add_argument("--keep-cache", "-k", action="store_true",
                         help="是否保留缓存文件不清除")
     args = parser.parse_args()
-    
-    # 确保缓存目录存在
-    os.makedirs(args.cache_dir, exist_ok=True)
-    
+
     # 构建manim命令
     quality_flag = f"-q{args.quality}"
+    preview_flag = "-p" if args.preview else ""
     force_flag = "-f" if args.force else ""
-    cache_flag = f"--media_dir {args.cache_dir}"
-    
+
     # 构建并执行命令
-    cmd = f"manim {quality_flag} {force_flag} {cache_flag} {__file__} RiemannSphere"
+    cmd = f"manim {quality_flag} {preview_flag} {force_flag} {__file__} RiemannSphere"
     print(f"执行命令: {cmd}")
     print("正在渲染动画，请耐心等待...")
     os.system(cmd)
     
     # 输出文件路径
     quality_map = {"l": "480p15", "m": "720p30", "h": "1080p60", "k": "2160p60"}
-    output_file = f"{args.cache_dir}/videos/demo/{quality_map[args.quality]}/RiemannSphere.mp4"
+    output_dir = f"{default_output_dir}/videos/{quality_map[args.quality]}"
+    output_file = f"{output_dir}/RiemannSphere.mp4"
     print(f"渲染完成！")
     print(f"输出文件: {output_file}")
     
     # 清理缓存文件（仅当未指定保留缓存时）
     if not args.keep_cache:
-        partial_dir = f"{args.cache_dir}/videos/demo/{quality_map[args.quality]}/partial_movie_files/RiemannSphere"
+        partial_dir = f"{output_dir}/partial_movie_files"
         if os.path.exists(partial_dir):
             shutil.rmtree(partial_dir)
             print(f"已清除部分电影文件缓存: {partial_dir}")
